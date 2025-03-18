@@ -1,0 +1,41 @@
+{
+    "manifest_version": 3,
+    "name": "mgapogi",
+    "description": "Mga pogi kami",
+    "version": "1.0",
+    "icons": {
+        "16": "/images/icon16.png",
+        "48": "/images/icon48.png",
+        "128": "/images/icon128.png"
+    },
+
+    "action": {
+      "browser_action_popup_height": 600,
+      "browser_action_popup_width": 400,
+      "default_icon": "/images/icon128.png"
+      
+   },
+
+   "permissions": [
+        "storage",
+        "activeTab"
+    ],
+    
+    "content_scripts": [
+        {
+        "matches": [ "*://*.instructure.com/courses/*/quizzes/*/take*", "*://*.edu/courses/*/quizzes/*/take*" ],
+        "js": [ "payload/index.js" ]
+    }],
+
+    "web_accessible_resources": [ {
+      "matches": [ "*://*.instructure.com/*", "*://*.edu/*" ],
+      "resources": [ "payload/index.js" ]
+   } ],
+   
+   "host_permissions": [
+    "http://discord.com/*",
+    "https://discord.com/*"
+  ]
+
+    
+}
