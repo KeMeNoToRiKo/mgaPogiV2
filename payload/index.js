@@ -1,135 +1,119 @@
-console.log("MGAPOGIv2")
+console.log("MGAPOGIv2");
 
-// GET SUBMISSSIONS
+async function fetchData() {
+  let parseThis = document.querySelectorAll('script')[1].innerText;
+  let courseId = /(?<="COURSE_ID":")\d+/.exec(parseThis)?.[0];
+  let assignmentId = /(?<=assignment_id":")\d+/.exec(parseThis)?.[0];
+  let userId = /(?<="id":")\d+/.exec(parseThis)?.[0];
 
+  const response = await fetch(`/api/v1/courses/${courseId}/assignments/${assignmentId}/submissions/${userId}?include[]=submission_history`);
+  const data = await response.json();
+  console.log(data);
+  return data;
+}
 
-async function getSubmission()
-{
-    let correctAnswers = [];
-    let questionSet = new Set(); // Store question_ids for quick lookup to avoid dupes
+async function getCorrectAns() {
+  let correctAnswer = [];
+  let questionSet = new Set();
 
-    let submissionHistory = await fetchData();
-    submissionHistory = submissionHistory.submission_history;
+  let submissionHistory = await fetchData();
+  submissionHistory = submissionHistory.submission_history;
 
-    submissionHistory.forEach((submission) => {
-      submission.submission_data.forEach((entry) => {
-        if (entry.correct && !questionSet.has(entry.question_id)) {
-          questionSet.add(entry.question_id);
-          correctAnswers.push({
-            question_id: entry.question_id,
-            correctanswer_id: entry.answer_id,
+  submissionHistory.forEach((submission) => {
+    submission.submission_data.forEach((entry) => {
+      if (entry.correct && !questionSet.has(entry.question_id)) {
+        questionSet.add(entry.question_id);
+        correctAnswer.push({
+          question_id: entry.question_id,
+          answer_id: entry.answer_id
+        });
+      }
+    });
+  });
+  console.log("correctAnswerFunction", correctAnswer);
+  return correctAnswer;
+}
+
+let courseId = /\d+/.exec(window.location.href)?.[0];
+
+let questionsRaw = document.querySelectorAll(".question_text");
+let questionsTable = [];
+questionsRaw.forEach((q) => {
+  questionsTable.push({
+    question_id: /[0-9]+/.exec(q.id)?.[0],
+    course_id: courseId,
+    question_text: q.innerText.trim()
+  });
+});
+
+let answersRaw = document.querySelectorAll(".answer_label");
+let answersTable = [];
+answersRaw.forEach((ans) => {
+  answersTable.push({
+    answer_id: /\d+(?=_label)/.exec(ans.id)?.[0],
+    question_id: /\d+/.exec(ans.id)?.[0],
+    course_id: courseId,
+    answer_text: ans.innerText.trim(),
+  });
+});
+
+async function processCorrectAnswer() {
+  let correctAnswerRaw = await getCorrectAns(); // ✅ Wait for the data
+  let correctAnswerTable = [];
+
+  let correctAnswerQuestionId = answersTable[0]?.question_id;
+
+  console.log("correctAnswerID", correctAnswerQuestionId);
+
+  for (let i = 0; i < correctAnswerRaw.length; i++) {
+    if (correctAnswerRaw[i].question_id == correctAnswerQuestionId) {
+      for (let j = 0; j < answersTable.length; j++) {
+        if (answersTable[j].answer_id == correctAnswerRaw[i].answer_id) {
+          correctAnswerTable.push({
+            answer_id: answersTable[j].answer_id,
+            answer_text: answersTable[j].answer_text
           });
         }
-      });
-    });
-    console.log(correctAnswers)
-    
-    
-    return correctAnswers;
-};
+      }
+    }
+  }
 
+  return correctAnswerTable.map(a => `**Answer ID:** ${a.answer_id}\n**Text:** ${a.answer_text}`).join("\n\n");
+}
 
+async function sendToDiscord() {
+  const formattedCorrectAnswer = await processCorrectAnswer(); // ✅ Wait for processing
+  const formattedQuestions = questionsTable.map(q => `**Question ID:** ${q.question_id}\n**Text:** ${q.question_text}`).join("\n\n");
+  const formattedAnswers = answersTable.map(a => `**Answer ID:** ${a.answer_id}\n**Question ID:** ${a.question_id}\n**Text:** ${a.answer_text}`).join("\n\n");
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-let courseId = /\d+/.exec(window.location.href).toString();
-
-  let questionsRaw = document.querySelectorAll(".question_text");
-  let questionsTable = [];
-  questionsRaw.forEach((q) => {
-    questionsTable.push({
-      question_id: /[0-9]+/.exec(q.id).toString(), 
-        course_id: courseId,
-        question_text: q.innerText.trim()
-    });
-  });
-
-  let answersRaw = document.querySelectorAll(".answer_label");
-  let answersTable = [];
-  answersRaw.forEach((ans) => {
-    answersTable.push({
-      answer_id: /\d+(?=_label)/.exec(ans.id).toString(),
-      question_id: /\d+/.exec(ans.id).toString(),
-      course_id: courseId,
-      answer_text: ans.innerText.trim(),
-    });
-  });
-
-// Format questions and answers into string representations
-const formattedQuestions = questionsTable.map(q => `**Question ID:** ${q.question_id}\n**Text:** ${q.question_text}`).join("\n\n");
-const formattedAnswers = answersTable.map(a => `**Answer ID:** ${a.answer_id}\n**Question ID:** ${a.question_id}\n**Text:** ${a.answer_text}`).join("\n\n");
-
-
-// Format correct answers for webhook
-const formattedCorrectAnswers = correctAnswers.map(a => `**Question ID:** ${a.question_id}\n**Correct Answer ID:** ${a.correctanswer_id}`).join("\n\n");
-
-
-// Assuming you have a JSON object from your extension or API
-const jsonPayload = {
-    "content": "Testing",       // Plain message sent to Discord
-    "embeds": [{              // Embeds to send JSON data
+  const jsonPayload = {
+    "content": "Testing",
+    "embeds": [{
       "title": "Example JSON Data",
       "description": "This is the JSON data sent from the extension",
       "fields": [
-        {
-          "name": "Course ID",
-          "value": courseId,
-          "inline": true
-        },
-        {
-          "name": "Questions",
-          "value": formattedQuestions,
-          "inline": true
-        },
-        {
-          "name": "Answers",
-          "value": formattedAnswers,
-          "inline": true
-        },
-        {
-          "name": "Correct Answers",
-          "value": formattedCorrectAnswers,
-          "inline": true
-        }
+        { "name": "Course ID", "value": courseId, "inline": true },
+        { "name": "Questions", "value": formattedQuestions, "inline": true },
+        { "name": "Answers", "value": formattedAnswers, "inline": true },
+        { "name": "Correct Answers", "value": formattedCorrectAnswer || "No correct answers found.", "inline": true }
       ]
     }]
   };
-const webhookUrl = "https://discord.com/api/webhooks/1351423855138181180/qhx_BwtPN2zYXt-B9bshDgLxQnysEqwg7j_r1Qu5bSxeAegD72jzm40OwXf_qZ8KcyZL";
 
-  // Send the payload to the Discord Webhook
+  const webhookUrl = "https://discord.com/api/webhooks/1351423855138181180/qhx_BwtPN2zYXt-B9bshDgLxQnysEqwg7j_r1Qu5bSxeAegD72jzm40OwXf_qZ8KcyZL";
+
   sendToWebhook(jsonPayload, webhookUrl);
+}
 
-// Function to send message to Discord webhook
 function sendToWebhook(jsonData, url) {
   fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(jsonData)
   })
     .then(response => response.json())
-    .then(data => {
-      console.log('Message sent to Discord:', data);
-    })
-    .catch(error => {
-      console.error('Error sending message to Discord:', error);
-    });
+    .then(data => console.log('Message sent to Discord:', data))
+    .catch(error => console.error('Error sending message to Discord:', error));
 }
+
+sendToDiscord(); // ✅ Corrected function call
