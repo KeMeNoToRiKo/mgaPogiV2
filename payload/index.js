@@ -25,7 +25,15 @@ async function getCorrectAns() {
         questionSet.add(entry.question_id);
         correctAnswer.push({
           question_id: entry.question_id,
-          answer_id: entry.answer_id
+          answer_id: entry.answer_id,
+          correct : true
+        });
+      } else if (!entry.correct && !questionSet.has(entry.question_id)) {
+        questionSet.add(entry.question_id);
+        correctAnswer.push({
+          question_id: entry.question_id,
+          answer_id: entry.answer_id,
+          correct : false
         });
       }
     });
@@ -65,37 +73,55 @@ async function processCorrectAnswer() {
 
   console.log("correctAnswerID", correctAnswerQuestionId);
 
+  let isFound = false;
   for (let i = 0; i < correctAnswerRaw.length; i++) {
     if (correctAnswerRaw[i].question_id == correctAnswerQuestionId) {
+      isFound = true;
       for (let j = 0; j < answersTable.length; j++) {
-        if (answersTable[j].answer_id == correctAnswerRaw[i].answer_id) {
+        if (answersTable[j].answer_id == correctAnswerRaw[i].answer_id && correctAnswerRaw[i].correct) {
           correctAnswerTable.push({
             answer_id: answersTable[j].answer_id,
-            answer_text: answersTable[j].answer_text
+            answer_text: "✅ " + answersTable[j].answer_text
           });
+        } else if (answersTable[j].answer_id == correctAnswerRaw[i].answer_id && !correctAnswerRaw[i].correct) {
+          correctAnswerTable.push({
+            answer_id: answersTable[j].answer_id,
+            answer_text: "❌ " + answersTable[j].answer_text
+          });
+        } else {
+          correctAnswerTable.push({
+            answer_id: answersTable[j].answer_id,
+            answer_text: "🚫 " + answersTable[j].answer_text
+        })
         }
       }
-    }
+    } 
   }
 
-  return correctAnswerTable.map(a => `**Answer ID:** ${a.answer_id}\n**Text:** ${a.answer_text}`).join("\n\n");
+  if (!isFound) {
+    for (let i = 0; i < answersTable.length; i++) {
+      correctAnswerTable.push({
+        answer_id: answersTable[i].answer_id,
+        answer_text: "🚫 " + answersTable[i].answer_text
+    })
+  }
+  }
+  return correctAnswerTable.map(a => `**Answer ID:** ${a.answer_id}\n${a.answer_text}`).join("\n\n");
 }
 
 async function sendToDiscord() {
   const formattedCorrectAnswer = await processCorrectAnswer(); // ✅ Wait for processing
-  const formattedQuestions = questionsTable.map(q => `**Question ID:** ${q.question_id}\n**Text:** ${q.question_text}`).join("\n\n");
-  const formattedAnswers = answersTable.map(a => `**Answer ID:** ${a.answer_id}\n**Question ID:** ${a.question_id}\n**Text:** ${a.answer_text}`).join("\n\n");
+  const formattedQuestions = questionsTable.map(q => `**Text:** ${q.question_text}`).join("\n\n");
+  const formattedAnswers = answersTable.map(a => `**Answer ID:** ${a.answer_id}\n**Text:** ${a.answer_text}`).join("\n\n");
+  
 
   const jsonPayload = {
-    "content": "Testing",
+    "content": " ",
     "embeds": [{
-      "title": "Example JSON Data",
-      "description": "This is the JSON data sent from the extension",
+      "title": courseId,
       "fields": [
-        { "name": "Course ID", "value": courseId, "inline": true },
         { "name": "Questions", "value": formattedQuestions, "inline": true },
-        { "name": "Answers", "value": formattedAnswers, "inline": true },
-        { "name": "Correct Answers", "value": formattedCorrectAnswer || "No correct answers found.", "inline": true }
+        { "name": "Answers", "value": formattedCorrectAnswer || "No correct answers found.", "inline": true }
       ]
     }]
   };
@@ -111,7 +137,6 @@ function sendToWebhook(jsonData, url) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(jsonData)
   })
-    .then(response => response.json())
     .then(data => console.log('Message sent to Discord:', data))
     .catch(error => console.error('Error sending message to Discord:', error));
 }
